@@ -7,16 +7,17 @@
 #include <semaphore.h>
 
 //
-// TODO: Definição dos semáforos (variaveis precisam ser globais)
+// TODO: Definição dos semáforos (variáveis precisam ser globais)
 //
+sem_t *chopstick_semaphores;  // Semáforos para controlar o acesso aos palitos
 
-// lista quem esta de posse de um chopstick
+// lista quem está de posse de um chopstick
 int *chopstick_use;
 
-// numero de filosofos
+// número de filósofos
 int N_FILOS;
 
-// prototipos das funcoes
+// protótipos das funções
 void * filosofo(void *);
 void pegar(int, int);
 void liberar(int, int);
@@ -24,7 +25,7 @@ int gera_rand(int);
 
 int main(int argc, char ** argv)
 {
-    // threads dos filosofos
+    // threads dos filósofos
     pthread_t * tids;
 
     long i;
@@ -37,61 +38,71 @@ int main(int argc, char ** argv)
         return 0;
     }
     
-    // numero de filosofos
+    // número de filósofos
     N_FILOS = atoi(argv[1]);
     
-    // gerando uma lista de threads de filosofos
+    // gerando uma lista de threads de filósofos
     tids = malloc(N_FILOS * sizeof(pthread_t));
 
-    // gerando uma lista de uso dos chopsticks
+    // gerando uma lista de uso dos palitos
     chopstick_use = malloc(N_FILOS * sizeof(int));
     
-    // um chopstick esta livre se estiver -1
+    // um palito está livre se estiver -1
     for (i = 0; i < N_FILOS; i++)
     {
         chopstick_use[i] = -1;
     }
 
     //
-    // TODO: Criação dos semáforos (aqui é quando define seus
-    // valores)
-    // 
+    // TODO: Criação dos semáforos (aqui é quando define seus valores)
+    //
+    chopstick_semaphores = malloc(N_FILOS * sizeof(sem_t));
+    for (i = 0; i < N_FILOS; i++)
+    {
+        sem_init(&chopstick_semaphores[i], 0, 1);  // Inicializa cada semáforo com valor 1 (liberado)
+    }
  
-    // iniciando as threads dos filosofos
+    // iniciando as threads dos filósofos
     for (i = 0; i < N_FILOS; i++)
     {
         pthread_create(&tids[i], NULL, filosofo, (void *)i);
     }
     
-    // aguardando as threads dos filosofos terminarem
+    // aguardando as threads dos filósofos terminarem
     for (i = 0; i < N_FILOS; i++)
     {
         pthread_join(tids[i], NULL);
     }
     
     //
-    // TODO: Excluindo os semaforos
+    // TODO: Excluindo os semáforos
     // 
+    for (i = 0; i < N_FILOS; i++)
+    {
+        sem_destroy(&chopstick_semaphores[i]);  // Destroi cada semáforo
+    }
+    free(chopstick_semaphores);
 
-    // liberando a memoria alocada
+    // liberando a memória alocada
     free(tids);
+    free(chopstick_use);
 
     return 0;
 }
 
 void * filosofo(void * id)
 {
-    // convertendo o Id do filosofo para int
+    // convertendo o ID do filósofo para int
     long i = (long)id;
     
     printf("\t> Filosofo %d pensando\n",i);
     usleep(gera_rand(1000000));
 
-    // ordem dos chopsticks depende do id  
+    // ordem dos palitos depende do ID  
     int c1, c2;
 
-    // OBS: alterando a ordem de pegar o chopstick para evitar deadlock
-    if (i%2 == 0) // com base no id do filosofo (par ou impar)
+    // OBS: alterando a ordem de pegar o palito para evitar deadlock
+    if (i%2 == 0) // com base no ID do filósofo (par ou ímpar)
     {
         c1 = i;             // esquerda
         c2 = (i+1)%N_FILOS; // direita
@@ -102,11 +113,14 @@ void * filosofo(void * id)
         c2 = i;             // esquerda 
     }
 
+    //
+    // TODO: precisa garantir que mais de um filósofo não pegue o mesmo
+    // palito simultaneamente
+    //
 
-    //
-    // TODO: precisa garantir que mais de um filosofo nao pegue o mesmo
-    // chopstick simultaneamente
-    //
+    sem_wait(&chopstick_semaphores[i]);  // Espera até que o palito esteja disponível
+    sem_wait(&chopstick_semaphores[(i + 1) % N_FILOS]);
+    
     pegar(i, c1);
     pegar(i, c2);
     
@@ -114,17 +128,21 @@ void * filosofo(void * id)
     usleep(gera_rand(1000000));
     
     //
-    // TODO: precisa garantir que os filosofos liberem os chopsticks
+    // TODO: precisa garantir que os filósofos liberem os palitos
     // após usar
     //
+
+    sem_post(&chopstick_semaphores[i]);  // Sinaliza que o palito foi liberado
+    sem_post(&chopstick_semaphores[(i + 1) % N_FILOS]);
+
     liberar(i, c1);
     liberar(i, c2);
-
 }
 
-// filosofo 'i' quer pegar o chopstick definido por 'num'
+// filósofo 'i' quer pegar o palito definido por 'num'
 void pegar(int i, int num)
 {
+    
     if (chopstick_use[num] != -1)
     {
         printf("===== ALERTA DO FILOSOFO %d =====\n===== CHOPSTICK[%d] EM USO POR %d =====\n",
@@ -134,7 +152,7 @@ void pegar(int i, int num)
     printf("+ Filosofo %d pegou o chopstick[%d]\n",i,num);
 }
 
-// filosofo 'i' quer liberar o chopstick definido por 'num'
+// filósofo 'i' quer liberar o palito definido por 'num'
 void liberar(int i, int num)
 {
     chopstick_use[num] = -1;
